@@ -1,0 +1,41 @@
+[project]
+name = "conv_editor"
+version = "0.1.0"
+description = "A editor for conversation datasets used in LLM."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "h5py>=3.14.0",
+    "openai>=1.108.1",
+    "pillow>=11.3.0",
+    "pydantic>=2.11.9",
+    "pydantic-settings>=2.10.1",
+    "pyside6>=6.9.2",
+    "rapidfuzz>=3.14.1",
+    "tokenizers>=0.22.1",
+    "wordcloud>=1.9.4",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+exclude = [
+    ".eggs",
+    ".git",
+    ".ipynb_checkpoints",
+    ".ruff_cache",
+    ".venv",
+    ".vscode",
+]
+line-length=180
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-line-length = "dynamic"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.13.1",
+]
