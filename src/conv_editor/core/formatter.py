@@ -69,7 +69,7 @@ class PromptFormatter:
         parts = [self.tokens["bos"]]
 
         for item in data_slice:
-            header = f"{self.tokens['header_start']}{item.role}{self.tokens['header_end']}\n\n"
+            header = f"\n{self.tokens['header_start']}{item.role}{self.tokens['header_end']}\n"
             turn_content_parts = []
 
             for content_part in item.content:
@@ -91,7 +91,7 @@ class PromptFormatter:
             parts.append(turn_string)
 
         # generation prompt for the assistant
-        assistant_prompt = f"\n{self.tokens['header_start']}{assistant_name}{self.tokens['header_end']}\n\n"
+        assistant_prompt = f"\n{self.tokens['header_start']}{assistant_name}{self.tokens['header_end']}\n"
         parts.append(assistant_prompt)
 
         return "".join(parts)

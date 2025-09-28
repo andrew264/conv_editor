@@ -35,6 +35,7 @@ from conv_editor.services.file_service import FileService
 from conv_editor.services.openai_service import OpenAIService
 from conv_editor.ui.dialogs.export_dialog import ExportDialog
 from conv_editor.ui.dialogs.generation_dialogs import ChatDialog, CompletionDialog
+from conv_editor.ui.dialogs.h5_inspector_dialog import H5InspectorDialog
 from conv_editor.ui.dialogs.search_dialog import SearchDialog
 from conv_editor.ui.dialogs.settings_dialog import SettingsDialog
 from conv_editor.ui.dialogs.word_cloud_dialog import WordCloudDialog
@@ -100,6 +101,7 @@ class MainWindow(QMainWindow):
         self.search_action.setShortcut(QKeySequence.StandardKey.Find)
         self.wordcloud_action = QAction("Generate &Word Cloud...", self)
         self.export_action = QAction(QIcon.fromTheme("document-export"), "Export for &Training...", self)
+        self.inspect_h5_action = QAction("&Inspect H5 Dataset...", self)
 
         self.settings_action.triggered.connect(self._open_settings_dialog)
         self.save_action.triggered.connect(self.save_conversation)
@@ -110,6 +112,7 @@ class MainWindow(QMainWindow):
         self.search_action.triggered.connect(self._open_search_dialog)
         self.wordcloud_action.triggered.connect(self._show_word_cloud)
         self.export_action.triggered.connect(self._open_export_dialog)
+        self.inspect_h5_action.triggered.connect(self._open_h5_inspector)
 
     def _create_menu_bar(self):
         menu_bar = self.menuBar()
@@ -126,6 +129,7 @@ class MainWindow(QMainWindow):
         tools_menu = menu_bar.addMenu("&Tools")
         tools_menu.addAction(self.wordcloud_action)
         tools_menu.addAction(self.export_action)
+        tools_menu.addAction(self.inspect_h5_action)
 
     def _create_tool_bar(self):
         tool_bar = self.addToolBar("Main Toolbar")
@@ -262,6 +266,11 @@ class MainWindow(QMainWindow):
             return
 
         dialog = ExportDialog(root_dir=str(self.file_service.root), assistant_name=self.current_settings["assistant_name"], parent=self)
+        dialog.exec()
+
+    @Slot()
+    def _open_h5_inspector(self):
+        dialog = H5InspectorDialog(self)
         dialog.exec()
 
     def _clear_and_reset_state(self):

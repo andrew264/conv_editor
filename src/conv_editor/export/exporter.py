@@ -72,7 +72,7 @@ class TrainingExporter:
         ignore = self.config.cross_entropy_ignore_index
         is_assistant_turn = item.role == self.config.assistant_name
 
-        header_str = f"{self.tokens.header_start}{item.role}{self.tokens.header_end}\n"
+        header_str = f"\n{self.tokens.header_start}{item.role}{self.tokens.header_end}\n"
         header_encoding = self.tokenizer.encode(header_str, add_special_tokens=False)
         all_input_ids.extend(header_encoding.ids)
         all_labels.extend([ignore] * len(header_encoding.ids))
