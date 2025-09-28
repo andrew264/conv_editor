@@ -125,4 +125,7 @@ class TrainingExporter:
 
         eot_encoding = self.tokenizer.encode(self.tokens.eot, add_special_tokens=False)
         all_input_ids.extend(eot_encoding.ids)
-        all_labels.extend([ignore] * len(eot_encoding.ids))
+        if is_assistant_turn:
+            all_labels.extend(eot_encoding.ids)  # assistant should know when to stop yapping
+        else:
+            all_labels.extend([ignore] * len(eot_encoding.ids))

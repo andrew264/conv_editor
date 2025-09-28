@@ -18,19 +18,21 @@ class HDF5Writer:
     def __enter__(self):
         try:
             self.file = h5py.File(self.filepath, "w")
+            vlen_dtype = h5py.special_dtype(vlen=np.int32)
+
             self.file.create_dataset(
                 "input_ids",
                 shape=(0,),
                 maxshape=(None,),
-                dtype=np.int32,
-                chunks=(self.chunk_size,),
+                dtype=vlen_dtype,
+                chunks=(1,),
             )
             self.file.create_dataset(
                 "labels",
                 shape=(0,),
                 maxshape=(None,),
-                dtype=np.int32,
-                chunks=(self.chunk_size,),
+                dtype=vlen_dtype,
+                chunks=(1,),
             )
             logger.info(f"Opened HDF5 file for writing at {self.filepath}")
             return self
@@ -49,24 +51,24 @@ class HDF5Writer:
             raise ValueError("Data dictionary must contain 'input_ids' and 'labels'.")
         if len(input_ids) != len(labels):
             raise ValueError(f"Length of input_ids ({len(input_ids)}) and labels ({len(labels)}) must be equal.")
+        if input_ids.ndim != 1:
+            raise ValueError("input_ids for a single conversation must be a 1D array.")
 
-        num_new_tokens = len(input_ids)
-        if num_new_tokens == 0:
+        if len(input_ids) == 0:
             return
 
-        new_size = self.size + num_new_tokens
-
+        new_size = self.size + 1
         self.file["input_ids"].resize((new_size,))
         self.file["labels"].resize((new_size,))
 
-        self.file["input_ids"][self.size :] = input_ids
-        self.file["labels"][self.size :] = labels
+        self.file["input_ids"][self.size] = input_ids
+        self.file["labels"][self.size] = labels
 
         self.size = new_size
 
     def close(self):
         if self.file:
-            logger.info(f"Closing HDF5 file. Total tokens written: {self.size}")
+            logger.info(f"Closing HDF5 file. Total conversations (rows) written: {self.size}")
             self.file.close()
             self.file = None
 
