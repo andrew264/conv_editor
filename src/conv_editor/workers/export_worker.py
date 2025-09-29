@@ -1,12 +1,13 @@
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
 
 from pydantic import TypeAdapter, ValidationError
 from PySide6.QtCore import QThread, Signal
 from tokenizers import Tokenizer
 
-from conv_editor.core.models import ConversationData
+from conv_editor.core.models import ConversationData, Item, TextContent, TextSegment
 from conv_editor.export.config import ExportConfig
 from conv_editor.export.exporter import TrainingExporter
 from conv_editor.export.hdf5_writer import HDF5Writer
@@ -67,6 +68,9 @@ class ExportWorker(QThread):
                         logger.warning(f"Skipping file '{file_path.name}' due to error: {e}")
                         continue
 
+                    if not conversation_data or conversation_data[0].role != "system":
+                        self._add_system_prompt(conversation_data)
+
                     tokenized_data = exporter.process_conversation(conversation_data)
 
                     if tokenized_data["input_ids"].size > 0:
@@ -84,6 +88,29 @@ class ExportWorker(QThread):
         except Exception as e:
             logger.exception("An unhandled error occurred in the export worker.")
             self.error.emit(f"A critical error occurred: {e}")
+
+    def _add_system_prompt(self, conversation_data: ConversationData):
+        sys_prompt_path = self.config.root_directory / "sysprompt.txt"
+        if not sys_prompt_path.exists():
+            logger.warning(f"System prompt file not found at: {sys_prompt_path}. Not adding to export.")
+            return
+
+        try:
+            with sys_prompt_path.open("r", encoding="utf-8") as f:
+                prompt_template = f.read().strip()
+
+            formatted_prompt = prompt_template
+            if "{datetime}" in prompt_template:
+                formatted_prompt = prompt_template.format(datetime=datetime.now().strftime("%d %B %Y %I:%M %p"))
+
+            sys_item = Item(
+                role="system",
+                content=[TextContent(segments=[TextSegment(text=formatted_prompt, learnable=False)])],
+            )
+            conversation_data.insert(0, sys_item)
+            logger.debug("System prompt added to a conversation for export.")
+        except Exception as e:
+            logger.error(f"Failed to read or format system prompt for export: {e}", exc_info=True)
 
     def stop(self):
         logger.info("Stop signal received by ExportWorker.")

@@ -355,7 +355,7 @@ class MainWindow(QMainWindow):
         if not full_path or not full_path.exists():
             QMessageBox.critical(self, "Error", f"Could not find file: {file_name}")
             return
-        self.conversation.load(full_path)
+        self.conversation.load(full_path, self.file_service.root)
         self._current_file = file_name
         self._render_conversation()
         self.update_ui_state()

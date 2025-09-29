@@ -1,12 +1,13 @@
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 from pydantic import ValidationError
 
 from conv_editor.core.formatter import PromptFormatter
-from conv_editor.core.models import ConversationData, Item
+from conv_editor.core.models import ConversationData, Item, TextContent, TextSegment
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ class Conversation:
     def __getitem__(self, val: Union[slice, int]) -> Union[Item, List[Item]]:
         return self.data[val]
 
-    def load(self, file_path: Union[str, Path]):
+    def load(self, file_path: Union[str, Path], root_dir: Optional[Path] = None):
         self.file_path = Path(file_path)
         try:
             with self.file_path.open("r", encoding="utf-8") as f:
@@ -40,8 +41,8 @@ class Conversation:
             self.data = []
             logger.error(f"Failed to load or validate file '{self.file_path}': {e}")
 
-        self._ensure_system_prompt()
-        self._has_unsaved_changes = False
+        prompt_added = self._ensure_system_prompt(root_dir)
+        self._has_unsaved_changes = prompt_added
 
     def save(self):
         if not self.file_path:
@@ -167,27 +168,34 @@ class Conversation:
             res.append({"role": api_role, "content": content_str})
         return res
 
-    def _ensure_system_prompt(self):
+    def _ensure_system_prompt(self, root_dir: Optional[Path] = None) -> bool:
         if not self.data or self.data[0].role == "system":
-            return
+            return False
 
-        # TODO: Deal with this later
-        # sys_prompt_path = Path.cwd() / "sysprompt.txt"
-        # if not sys_prompt_path.exists():
-        #     logger.warning(f"System prompt file not found at: {sys_prompt_path}")
-        #     return
-        #
-        # try:
-        #     with sys_prompt_path.open("r", encoding="utf-8") as f:
-        #         prompt_template = f.read().strip()
-        #     formatted_prompt = prompt_template.format(datetime=datetime.now().strftime("%d %B %Y %I:%M %p"))
-        #
-        #     sys_item = Item(
-        #         role="system",
-        #         content=[TextContent(segments=[TextSegment(text=formatted_prompt, learnable=False)])],
-        #     )
-        #     self.data.insert(0, sys_item)
-        #     self._has_unsaved_changes = True
-        #     logger.info("System prompt added to new conversation.")
-        # except Exception as e:
-        #     logger.error(f"Failed to read or format system prompt: {e}", exc_info=True)
+        if not root_dir:
+            logger.warning("Root directory not provided, cannot automatically add system prompt.")
+            return False
+
+        sys_prompt_path = root_dir / "sysprompt.txt"
+        if not sys_prompt_path.exists():
+            logger.warning(f"System prompt file not found at: {sys_prompt_path}")
+            return False
+
+        try:
+            with sys_prompt_path.open("r", encoding="utf-8") as f:
+                prompt_template = f.read().strip()
+
+            formatted_prompt = prompt_template
+            if "{datetime}" in prompt_template:
+                formatted_prompt = prompt_template.format(datetime=datetime.now().strftime("%d %B %Y %I:%M %p"))
+
+            sys_item = Item(
+                role="system",
+                content=[TextContent(segments=[TextSegment(text=formatted_prompt, learnable=False)])],
+            )
+            self.data.insert(0, sys_item)
+            logger.info("System prompt added to new conversation.")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to read or format system prompt: {e}", exc_info=True)
+            return False
