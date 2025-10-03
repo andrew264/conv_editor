@@ -49,8 +49,10 @@ class OpenAIService:
                 if not self._is_running:
                     logger.info("Chat stream stopped by user.")
                     break
-                if chunk.choices and chunk.choices[0].delta.content is not None:
-                    yield chunk.choices[0].delta.content
+                if chunk.choices:
+                    if hasattr(chunk.choices[0].delta, 'reasoning_content') and chunk.choices[0].delta.reasoning_content is not None:
+                        yield chunk.choices[0].delta.reasoning_content
+                    elif chunk.choices[0].delta.content is not None: yield chunk.choices[0].delta.content
         except OpenAIError as e:
             logger.error(f"OpenAI API error during chat stream: {e}")
             raise

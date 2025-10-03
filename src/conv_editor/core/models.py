@@ -45,21 +45,23 @@ class ReasoningContent(BaseModel):
         return "".join(s.text for s in self.segments)
 
 
-class FunctionParameters(BaseModel):
-    type: Literal["object"] = "object"
-    properties: Dict[str, Any]
-    required: List[str] = Field(default_factory=list)
-
-
-class FunctionSchema(BaseModel):
-    name: str
+class ToolProperty(BaseModel):
+    type: Union[str, List[str]]
     description: str
-    parameters: FunctionParameters
+    enum: Optional[List[str]] = None
+
+
+class ToolParameters(BaseModel):
+    type: Literal["object"] = "object"
+    properties: Dict[str, ToolProperty]
+    required: List[str] = Field(default_factory=list)
 
 
 class ToolDefinition(BaseModel):
     type: Literal["function"] = "function"
-    function: FunctionSchema
+    name: str
+    description: str
+    parameters: ToolParameters
 
 
 class ToolsContent(BaseModel):

@@ -28,14 +28,14 @@ from PySide6.QtWidgets import (
 )
 
 from conv_editor.core.models import (
-    FunctionParameters,
-    FunctionSchema,
     Item,
     ReasoningContent,
     TextContent,
     ToolCall,
     ToolCallContent,
     ToolDefinition,
+    ToolParameters,
+    ToolProperty,
     ToolResult,
     ToolResultsContent,
     ToolsContent,
@@ -299,7 +299,6 @@ class ItemWidget(QFrame):
 
         action = menu.exec(self.add_content_button.mapToGlobal(self.add_content_button.rect().bottomLeft()))
 
-        new_content = None
         if action == add_text_action:
             new_content = TextContent(segments=[])
         elif action == add_reason_action:
@@ -307,18 +306,17 @@ class ItemWidget(QFrame):
         elif action == add_tools_action:
             if self.item.role != "system":
                 QMessageBox.information(self, "Role Suggestion", "Tool definitions are typically placed in an item with the 'system' role.")
+
             default_tool = ToolDefinition(
-                function=FunctionSchema(
-                    name="get_current_weather",
-                    description="Get the current weather in a given location",
-                    parameters=FunctionParameters(
-                        properties={
-                            "location": {"type": "string", "description": "The city and state, e.g. San Francisco, CA"},
-                            "unit": {"type": "string", "enum": ["celsius", "fahrenheit"]},
-                        },
-                        required=["location"],
-                    ),
-                )
+                name="get_current_weather",
+                description="Get the current weather in a given location",
+                parameters=ToolParameters(
+                    properties={
+                        "location": ToolProperty(type="string", description="The city and state, e.g. San Francisco, CA"),
+                        "unit": ToolProperty(type=["string", "null"], description="The unit of temperature", enum=["celsius", "fahrenheit"]),
+                    },
+                    required=["location"],
+                ),
             )
             new_content = ToolsContent(definitions=[default_tool])
         elif action == add_tool_call_action:
