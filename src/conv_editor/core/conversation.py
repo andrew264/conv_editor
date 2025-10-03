@@ -50,7 +50,7 @@ class Conversation:
         try:
             with self.file_path.open("w", encoding="utf-8") as f:
                 json_data = [item.model_dump() for item in self.data]
-                json.dump(json_data, f, indent=2)
+                json.dump(json_data, f, indent=2, ensure_ascii=False)
             self._has_unsaved_changes = False
             logger.info(f"Saved conversation to {self.file_path}")
         except Exception as e:

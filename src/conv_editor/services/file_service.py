@@ -74,7 +74,7 @@ class FileService:
 
         try:
             with file_path.open("w", encoding="utf-8") as f:
-                json.dump([], f)
+                json.dump([], f, ensure_ascii=False)
             logger.info(f"Created new empty file: {file_path}")
             return file_path
         except OSError as e:
