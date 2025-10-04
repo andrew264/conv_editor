@@ -27,6 +27,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from conv_editor.core.commands.content_commands import (
+    AddContentBlockCommand,
+    MoveContentBlockCommand,
+    RemoveContentBlockCommand,
+    UpdateRoleCommand,
+)
 from conv_editor.core.models import (
     Item,
     ReasoningContent,
@@ -47,6 +53,7 @@ from conv_editor.ui.widgets.tool_content_widgets import ToolCallWidget, ToolResu
 
 if TYPE_CHECKING:
     from conv_editor.core.conversation import Conversation
+    from conv_editor.core.commands.undo_manager import UndoManager
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +67,6 @@ WIDGET_MAP = {
 
 
 class ItemWidget(QFrame):
-    item_changed = Signal()
     request_delete = Signal(int)
     request_generate = Signal(int)
     request_chat = Signal(int)
@@ -71,6 +77,7 @@ class ItemWidget(QFrame):
         item: Item,
         index: int,
         model: "Conversation",
+        undo_manager: "UndoManager",
         assistant_name: str,
         colors: dict,
         parent=None,
@@ -79,6 +86,7 @@ class ItemWidget(QFrame):
         self.item = item
         self.index = index
         self.model = model
+        self.undo_manager = undo_manager
         self.assistant_name = assistant_name
         self.colors = colors
         self.drag_start_position = None
@@ -214,8 +222,8 @@ class ItemWidget(QFrame):
         pos_in_content_area = self.content_area.mapFrom(self, event.position().toPoint())
         target_content_index, _ = self._get_content_drop_pos(pos_in_content_area)
 
-        self.model.move_content(source_item_index, source_content_index, self.index, target_content_index)
-        self.request_global_rerender.emit()
+        command = MoveContentBlockCommand(self.model, source_item_index, source_content_index, self.index, target_content_index)
+        self.undo_manager.do(command)
         event.acceptProposedAction()
 
     def _get_content_drop_pos(self, pos) -> tuple[int, int]:
@@ -238,12 +246,18 @@ class ItemWidget(QFrame):
             if item.widget():
                 item.widget().deleteLater()
 
+        if not self.item.content:
+            empty_label = QLabel("Click '+ Add Content' below to add text, reasoning, or tools.")
+            empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            empty_label.setStyleSheet("color: #777; font-style: italic; padding: 20px;")
+            self.content_layout.addWidget(empty_label)
+            return
+
         for idx, content_item in enumerate(self.item.content):
             widget_class = WIDGET_MAP.get(content_item.type)
 
             if widget_class:
-                widget = widget_class(content_item, idx, self.colors, self)
-                widget.content_changed.connect(self._update_model)
+                widget = widget_class(content_item, idx, self.colors, self.undo_manager, self)
                 widget.request_delete.connect(self._on_delete_content_requested)
                 self.content_layout.addWidget(widget)
             else:
@@ -266,10 +280,10 @@ class ItemWidget(QFrame):
     @Slot()
     def _on_role_changed(self):
         new_role = self.role_edit.text().strip()
-        if new_role and self.item.role != new_role:
-            self.item.role = new_role
-            self._update_model()
-            self._update_action_button_visibility()
+        old_role = self.item.role
+        if new_role and old_role != new_role:
+            command = UpdateRoleCommand(self.model, self.index, old_role, new_role)
+            self.undo_manager.do(command)
 
     def update_assistant_name(self, new_name: str):
         self.assistant_name = new_name
@@ -282,10 +296,8 @@ class ItemWidget(QFrame):
 
     @Slot(int)
     def _on_delete_content_requested(self, content_index: int):
-        if 0 <= content_index < len(self.item.content):
-            del self.item.content[content_index]
-            self._update_model()
-            self._build_content_widgets()
+        command = RemoveContentBlockCommand(self.model, self.index, content_index)
+        self.undo_manager.do(command)
 
     @Slot()
     def _show_add_content_menu(self):
@@ -323,14 +335,9 @@ class ItemWidget(QFrame):
             new_content = ToolCallContent(calls=[ToolCall(name="function_name", arguments={"arg": "value"})])
         elif action == add_tool_response_action:
             new_content = ToolResultsContent(results=[ToolResult(name="function_name", content="example result")])
-            if self.item.role != "tool":
-                self.item.role = "tool"
-                self.role_edit.setText("tool")
-                self._update_action_button_visibility()
         else:
             return
 
         if new_content:
-            self.item.content.append(new_content)
-            self._update_model()
-            self._build_content_widgets()
+            command = AddContentBlockCommand(self.model, self.index, new_content)
+            self.undo_manager.do(command)

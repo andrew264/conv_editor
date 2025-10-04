@@ -119,6 +119,7 @@ class ExportDialog(QDialog):
         button_layout = QHBoxLayout()
         button_layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
         self.start_button = QPushButton("Start Export")
+        self.start_button.setDefault(True)
         self.close_button = QPushButton("Close")
         button_layout.addWidget(self.start_button)
         button_layout.addWidget(self.close_button)

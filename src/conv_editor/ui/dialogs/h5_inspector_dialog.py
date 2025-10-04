@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QCloseEvent
+from PySide6.QtGui import QCloseEvent, QKeyEvent
 from PySide6.QtWidgets import (
     QDialog,
     QFileDialog,
@@ -104,6 +104,18 @@ class H5InspectorDialog(QDialog):
         self.prev_button.clicked.connect(self._on_previous)
         self.next_button.clicked.connect(self._on_next)
         self.jump_button.clicked.connect(self._on_jump_to)
+
+    def keyPressEvent(self, event: QKeyEvent):
+        key = event.key()
+
+        if key in (Qt.Key.Key_Up, Qt.Key.Key_Left):
+            self._on_previous()
+            event.accept()
+        elif key in (Qt.Key.Key_Down, Qt.Key.Key_Right):
+            self._on_next()
+            event.accept()
+        else:
+            super().keyPressEvent(event)
 
     def _browse_h5(self):
         path, _ = QFileDialog.getOpenFileName(self, "Select HDF5 File", "", "HDF5 files (*.h5 *.hdf5)")

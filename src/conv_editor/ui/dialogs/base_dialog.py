@@ -27,7 +27,7 @@ class BaseGenerationDialog(QDialog):
         super().__init__(parent)
         self.setMinimumSize(600, 500)
         self.setWindowTitle("Generating...")
-        self.setModal(True)
+        self.setModal(False)
 
         self.worker: Union["CompletionWorker", "ChatWorker", None] = None
         self._stopped_manually = False

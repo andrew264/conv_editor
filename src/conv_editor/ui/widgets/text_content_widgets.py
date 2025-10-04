@@ -5,6 +5,7 @@ from PySide6.QtCore import QTimer, Slot
 from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import QSizePolicy, QTextEdit, QWidget
 
+from conv_editor.core.commands.content_commands import UpdateContentCommand
 from conv_editor.core.models import TextSegment
 from conv_editor.ui.widgets.base_content_widget import BaseContentWidget
 from conv_editor.ui.widgets.maskable_text_edit import MaskableTextEdit
@@ -19,10 +20,11 @@ class BaseTextSegmentWidget(BaseContentWidget):
     MIN_TEXT_EDIT_LINES = 3
     MAX_TEXT_EDIT_LINES = 10
 
-    def __init__(self, content_item: "ContentItem", index: int, colors: dict, parent=None):
-        super().__init__(content_item, index, colors, parent)
+    def __init__(self, content_item: "ContentItem", index: int, colors: dict, undo_manager, parent=None):
+        super().__init__(content_item, index, colors, undo_manager, parent)
         self.toggle_button.setVisible(True)
         self.toggle_button.clicked.connect(self._on_toggle_block)
+        self.content_on_focus = None
 
     def update_colors(self, colors: dict):
         super().update_colors(colors)
@@ -42,7 +44,22 @@ class BaseTextSegmentWidget(BaseContentWidget):
 
         self._connect_signals()
         self._adjust_height()
+
+        self.text_edit.focusInEvent = self.on_focus_in
+        self.text_edit.focusOutEvent = self.on_focus_out
+
         return self.text_edit
+
+    def on_focus_in(self, event):
+        self.content_on_focus = self.content_item.model_copy(deep=True)
+        QTextEdit.focusInEvent(self.text_edit, event)
+
+    def on_focus_out(self, event):
+        if self.content_on_focus and self.content_on_focus != self.content_item:
+            command = UpdateContentCommand(self.conversation_model, self.item_index, self.index, self.content_on_focus, self.content_item)
+            self.undo_manager.do(command)
+        self.content_on_focus = None
+        QTextEdit.focusOutEvent(self.text_edit, event)
 
     def _connect_signals(self):
         self.text_edit.segmentsChanged.connect(self._on_segments_changed)
@@ -57,7 +74,6 @@ class BaseTextSegmentWidget(BaseContentWidget):
         new_segments = self.text_edit.get_segments()
         if self.content_item.segments != new_segments:
             self.content_item.segments = new_segments
-            self.content_changed.emit()
 
     @Slot()
     def _on_toggle_block(self):
@@ -90,8 +106,8 @@ class TextContentWidget(BaseTextSegmentWidget):
 class ReasoningContentWidget(BaseTextSegmentWidget):
     content_item: "ReasoningContent"
 
-    def __init__(self, content_item: "ContentItem", index: int, colors: dict, parent=None):
-        super().__init__(content_item, index, colors, parent)
+    def __init__(self, content_item: "ContentItem", index: int, colors: dict, undo_manager, parent=None):
+        super().__init__(content_item, index, colors, undo_manager, parent)
         self._apply_reasoning_style()
 
     def update_colors(self, colors: dict):

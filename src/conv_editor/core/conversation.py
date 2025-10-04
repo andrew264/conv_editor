@@ -36,7 +36,7 @@ class Conversation:
             with self.file_path.open("r", encoding="utf-8") as f:
                 raw_data = json.load(f) or []
             self.data = [Item.model_validate(item) for item in raw_data]
-            logger.info(f"Loaded and validated conversation from {self.file_path}")
+            logger.info(f"Loaded conversation from {self.file_path}")
         except (FileNotFoundError, json.JSONDecodeError, ValidationError) as e:
             self.data = []
             logger.error(f"Failed to load or validate file '{self.file_path}': {e}")
@@ -150,12 +150,14 @@ class Conversation:
     def get_data_slice_for_chat(self, end_idx: int, with_reason: bool) -> List[Dict[str, Any]]:
         res = []
         for item in self.data[:end_idx]:
+            username = ""
             if item.role == self.assistant_name:
                 api_role = "assistant"
             elif item.role == "system":
                 api_role = "system"
             else:
                 api_role = "user"
+                username = item.role + ": "
 
             content_str = ""
             for content_part in item.content:
@@ -165,7 +167,7 @@ class Conversation:
                             content_str += f"<think>{content_part.full_text}</think>\n"
                     else:
                         content_str += content_part.full_text
-            res.append({"role": api_role, "content": content_str})
+            res.append({"role": api_role, "content": username + content_str})
         return res
 
     def _ensure_system_prompt(self, root_dir: Optional[Path] = None) -> bool:

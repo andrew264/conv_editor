@@ -26,7 +26,6 @@ class MaskableTextEdit(QTextEdit):
         self.textChanged.connect(self._on_text_changed)
 
     def update_colors(self, bg_color: str, fg_color: str):
-        """Updates the colors used for unlearnable text formatting."""
         self._learnable_format.setBackground(Qt.GlobalColor.transparent)
         self._learnable_format.setForeground(self.palette().color(QPalette.ColorRole.Text))
 
@@ -64,7 +63,7 @@ class MaskableTextEdit(QTextEdit):
         menu.exec(event.globalPos())
 
     def keyPressEvent(self, event: QKeyEvent):
-        if event.modifiers() == Qt.KeyboardModifier.ControlModifier and event.key() == Qt.Key.Key_M:
+        if event.modifiers() == Qt.KeyboardModifier.ControlModifier and event.key() == Qt.Key.Key_L:
             cursor = self.textCursor()
             if cursor.hasSelection():
                 is_currently_unlearnable = self._is_selection_unlearnable(cursor)

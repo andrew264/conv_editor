@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 if TYPE_CHECKING:
+    from conv_editor.core.commands.undo_manager import UndoManager
     from conv_editor.core.models import ContentItem
     from conv_editor.ui.widgets.item_widget import ItemWidget
 
@@ -52,14 +53,19 @@ class ContentHeaderWidget(QWidget):
 
 
 class BaseContentWidget(QWidget):
-    content_changed = Signal()
     request_delete = Signal(int)
 
-    def __init__(self, content_item: "ContentItem", index: int, colors: dict, parent=None):
+    def __init__(self, content_item: "ContentItem", index: int, colors: dict, undo_manager: "UndoManager", parent=None):
         super().__init__(parent)
         self.content_item = content_item
         self.index = index
         self.colors = colors
+        self.undo_manager = undo_manager
+
+        parent_item_widget = self.parent()
+        self.item_index = parent_item_widget.index
+        self.conversation_model = parent_item_widget.model
+
         self._setup_base_ui()
 
     def _setup_base_ui(self):
@@ -112,7 +118,7 @@ class BaseContentWidget(QWidget):
         drag = QDrag(self)
         mime_data = QMimeData()
 
-        parent_item_candidate = self.parent().parent()
+        parent_item_candidate = self.parent()
 
         if not isinstance(parent_item_candidate, QWidget) or not hasattr(parent_item_candidate, "index"):
             logger.warning("Could not find valid ItemWidget parent for drag operation. Found type: %s", type(parent_item_candidate))

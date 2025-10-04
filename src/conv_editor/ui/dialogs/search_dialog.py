@@ -1,7 +1,9 @@
+import json
 import logging
 from typing import List, Optional
 
 from PySide6.QtCore import Qt, QTimer, Signal, Slot
+from PySide6.QtGui import QColor, QTextCharFormat
 from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
@@ -13,7 +15,10 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QSpinBox,
+    QSplitter,
+    QTextEdit,
     QVBoxLayout,
+    QWidget,
 )
 
 from conv_editor.core.models import SearchMatch
@@ -29,7 +34,7 @@ class SearchDialog(QDialog):
     def __init__(self, root_dir: str, score_cutoff: int, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Search Conversations")
-        self.setMinimumSize(550, 600)
+        self.setMinimumSize(850, 600)
         self.root_dir = root_dir
         self.initial_score_cutoff = score_cutoff
 
@@ -38,13 +43,21 @@ class SearchDialog(QDialog):
         self.search_timer.setInterval(300)
         self.search_timer.setSingleShot(True)
         self.current_results: List[SearchMatch] = []
+        self.preview_cache: dict = {"path": None, "content": None}
 
         self._setup_ui()
         self._connect_signals()
         self._update_options_state()
 
     def _setup_ui(self):
-        layout = QVBoxLayout(self)
+        main_layout = QVBoxLayout(self)
+
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        main_layout.addWidget(splitter, 1)
+
+        left_pane = QWidget()
+        left_layout = QVBoxLayout(left_pane)
+        left_layout.setContentsMargins(0, 0, 0, 0)
 
         self.search_edit = QLineEdit()
         self.search_edit.setPlaceholderText("Enter search query...")
@@ -52,17 +65,56 @@ class SearchDialog(QDialog):
         search_input_layout = QHBoxLayout()
         search_input_layout.addWidget(QLabel("Search:"))
         search_input_layout.addWidget(self.search_edit)
-        layout.addLayout(search_input_layout)
+        left_layout.addLayout(search_input_layout)
 
+        self._setup_options_ui(left_layout)
+
+        self.results_list = QListWidget()
+        self.results_list.setAlternatingRowColors(True)
+        left_layout.addWidget(self.results_list)
+
+        right_pane = QWidget()
+        right_layout = QVBoxLayout(right_pane)
+        right_layout.setContentsMargins(5, 0, 0, 0)
+
+        self.preview_path_label = QLabel("Click a result to see a preview.")
+        self.preview_path_label.setWordWrap(True)
+        right_layout.addWidget(self.preview_path_label)
+
+        self.preview_text_edit = QTextEdit()
+        self.preview_text_edit.setReadOnly(True)
+        self.preview_text_edit.setFontFamily("monospace")
+        self.preview_text_edit.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+        right_layout.addWidget(self.preview_text_edit)
+
+        splitter.addWidget(left_pane)
+        splitter.addWidget(right_pane)
+        splitter.setSizes([350, 500])
+
+        self.status_label = QLabel("Enter a query to start searching.")
+        main_layout.addWidget(self.status_label)
+
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        button_box.rejected.connect(self.reject)
+        main_layout.addWidget(button_box)
+
+    def _setup_options_ui(self, parent_layout: QVBoxLayout):
         options_layout = QGridLayout()
         options_layout.setContentsMargins(0, 5, 0, 5)
+
         self.fuzzy_checkbox = QCheckBox("Fuzzy Search")
         self.fuzzy_checkbox.setChecked(True)
+        self.fuzzy_checkbox.setToolTip("Enable approximate, 'fuzzy' matching.\nCan be slower than exact search.")
+
         self.case_checkbox = QCheckBox("Case Insensitive")
+        self.case_checkbox.setToolTip("For exact search: Ignore the difference between\nUPPERCASE and lowercase letters.")
+
         self.score_cutoff_spinbox = QSpinBox()
         self.score_cutoff_spinbox.setRange(1, 100)
         self.score_cutoff_spinbox.setValue(self.initial_score_cutoff)
         self.score_cutoff_spinbox.setSuffix("%")
+        self.score_cutoff_spinbox.setToolTip("For fuzzy search: Only show results with a similarity\nscore above this value (100 is a perfect match).")
+
         self.max_results_spinbox = QSpinBox()
         self.max_results_spinbox.setRange(1, 1000)
         self.max_results_spinbox.setValue(25)
@@ -74,30 +126,17 @@ class SearchDialog(QDialog):
         options_layout.addWidget(QLabel("Max Results:"), 1, 1, Qt.AlignmentFlag.AlignRight)
         options_layout.addWidget(self.max_results_spinbox, 1, 2)
         options_layout.setColumnStretch(0, 1)
-        layout.addLayout(options_layout)
 
-        self.results_list = QListWidget()
-        self.results_list.setAlternatingRowColors(True)
-        layout.addWidget(self.results_list)
-
-        self.status_label = QLabel("Enter a query to start searching.")
-        layout.addWidget(self.status_label)
-
-        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
-        button_box.rejected.connect(self.reject)
-        layout.addWidget(button_box)
+        parent_layout.addLayout(options_layout)
 
     def _connect_signals(self):
         self.search_edit.textChanged.connect(self.search_timer.start)
         self.search_timer.timeout.connect(self._trigger_search)
+
+        self.results_list.itemClicked.connect(self._display_preview)
         self.results_list.itemDoubleClicked.connect(self._on_item_double_clicked)
 
-        option_widgets = [
-            self.fuzzy_checkbox,
-            self.case_checkbox,
-            self.score_cutoff_spinbox,
-            self.max_results_spinbox,
-        ]
+        option_widgets = [self.fuzzy_checkbox, self.case_checkbox, self.score_cutoff_spinbox, self.max_results_spinbox]
         for widget in option_widgets:
             if isinstance(widget, QCheckBox):
                 widget.toggled.connect(self._maybe_retrigger_search)
@@ -123,6 +162,9 @@ class SearchDialog(QDialog):
         self._stop_current_search()
         self.results_list.clear()
         self.current_results.clear()
+        self.preview_text_edit.clear()
+        self.preview_path_label.setText("Click a result to see a preview.")
+        self.preview_cache = {"path": None, "content": None}
 
         if not query:
             self.status_label.setText("Enter a query to start searching.")
@@ -142,6 +184,59 @@ class SearchDialog(QDialog):
         self.search_worker.finished.connect(self._on_search_finished)
         self.search_worker.error.connect(self._on_search_error)
         self.search_worker.start()
+
+    @Slot(QListWidgetItem)
+    def _display_preview(self, item: QListWidgetItem):
+        row = self.results_list.row(item)
+        if not (0 <= row < len(self.current_results)):
+            return
+
+        result = self.current_results[row]
+        self.preview_path_label.setText(f"<b>Preview:</b> {result.file_path}")
+
+        try:
+            if self.preview_cache["path"] != result.file_path:
+                with open(result.file_path, "r", encoding="utf-8") as f:
+                    content = json.load(f)
+                pretty_content = json.dumps(content, indent=2)
+                self.preview_cache = {"path": result.file_path, "content": pretty_content}
+                self.preview_text_edit.setPlainText(pretty_content)
+            else:
+                self.preview_text_edit.setPlainText(self.preview_cache["content"])
+
+            self._highlight_match(result)
+
+        except (IOError, json.JSONDecodeError) as e:
+            error_msg = f"Error reading or parsing file:\n{result.file_path}\n\n{e}"
+            self.preview_text_edit.setPlainText(error_msg)
+            logger.error(error_msg)
+
+    def _highlight_match(self, result: SearchMatch):
+        search_text = ""
+
+        if result.match_indices:
+            start, end = result.match_indices
+            search_text = result.preview[start:end]
+
+        if not search_text:
+            search_text = self.search_edit.text().strip()
+
+        if not search_text:
+            return
+
+        cursor = self.preview_text_edit.textCursor()
+        cursor.movePosition(cursor.MoveOperation.Start)
+        self.preview_text_edit.setTextCursor(cursor)
+
+        found_cursor = self.preview_text_edit.document().find(search_text)
+
+        if not found_cursor.isNull():
+            highlight_format = QTextCharFormat()
+            highlight_format.setBackground(QColor("#D2B48C"))
+            highlight_format.setForeground(QColor("black"))
+            found_cursor.mergeCharFormat(highlight_format)
+            self.preview_text_edit.setTextCursor(found_cursor)
+            self.preview_text_edit.ensureCursorVisible()
 
     @Slot(SearchMatch)
     def _on_search_result_found(self, result: SearchMatch):
@@ -174,7 +269,6 @@ class SearchDialog(QDialog):
         if 0 <= row < len(self.current_results):
             selected_result = self.current_results[row]
             self.search_result_selected.emit(selected_result)
-            self.accept()
 
     def _stop_current_search(self):
         if self.search_worker and self.search_worker.isRunning():
